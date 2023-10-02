@@ -44,8 +44,11 @@ class Benchmark():
     def __init__(self,
                  df_ground, index_column,
                  objective_names, objective_modes,
+                 reaction_components,
                  features_regression='all',
                  objective_thresholds=None,
+                 columns_train=None,
+                 init_size=96,
                  filename='benchmark.csv',
                  acquisition_function='EHVI',
                  filename_results='benchmark_results.csv'):
@@ -61,12 +64,18 @@ class Benchmark():
             list of strings including the names of the columns that will be considered as objectives.
         objective_modes: list
             list of strings for deciding whether the objective has to be minimize ('min') or maximize ('max').
+        reaction_components: dict
+            dictionary containing the reaction components.
         features_regression: list
             list of strings containing the names of the columns that will be considered as features for the regression model.
         objective_thresholds: list
             list of floats containing the threshold values for each objective.
         acquisition_function: string
             name of the acquisition function to use (implemented are: 'EHVI', 'MOUCB', 'MOGreedy').
+        columns_train: list
+            list of the columns to use for training the model if explicity specified and not random.
+        init_size: int
+            number of initial samples to use for training the model.
         filename: string
             name of the file to run the optimization (temporary file).
         filename_results:
@@ -77,15 +86,20 @@ class Benchmark():
         self.objective_modes = objective_modes
         self.objective_thresholds = objective_thresholds
         self.features_regressions = features_regression
+        self.reaction_components = reaction_components
+        self.columns_train = columns_train
+        self.init_size = init_size
         self.filename = filename
         self.filename_results = filename_results
         self.index_column = index_column
         self.acquisition_function = acquisition_function
 
-        # Safe check. Check whether there are no duplicates in the regression domain.
+        # Safe check. Check whether there are no duplicates in the regression domain and training columns exit.
         df_check = self.df_ground[self.features_regressions]
         msg = 'There are entries that are degenerate. Check your dataset.'
         assert len(df_check) == len(df_check.drop_duplicates()), msg
+        if self.columns_train is not None:
+            assert set(columns_train).issubset(df_check.columns), "Training columns are missing!"
 
         # Calculate data for the ground truth function.
         self.objective_values_ground = self.get_objective_values(df=self.df_ground)
@@ -333,9 +347,22 @@ class Benchmark():
             if len(self.objective_names) == 3:
                 self._plot_ground_3d()
 
+        # Add training data to scope if not random.
+        if self.columns_train is not None:
+            df_scope = self.edbo.generate_reaction_scope(
+                components=self.reaction_components,
+                filename=self.filename,
+                check_overwrite=False  # will just overwrite the file if it exists
+            )
+            df_scope[self.index_column] = np.arange(0, len(df_scope.values))
+            df_with_train = df_scope.merge(self.df_ground[self.columns_train], on=self.index_column, how='left')
+            assert len(df_with_train) == self.init_size, "The number of training samples you'd like did not match up with how many are initialized."
+            df_with_train.to_csv(self.filename, index=False)
+
         for step in range(0, steps):
             self.step = step
 
+            print(f"Step {step} of {steps}.")
             df_run = self.edbo.run(
                     filename=self.filename,
                     batch=batch,
@@ -443,9 +470,11 @@ class Benchmark():
                     self._plot_train_pareto_3d()
 
             if plot_predictions and os.path.exists(f"pred_{self.filename}"):
-                self._plot_predictions()
+                self._plot_predictions(step_num=step, total_steps=steps)
 
-    def _plot_predictions(self):
+    def _plot_predictions(self,
+                          step_num=None,
+                          total_steps=None):
 
         df_preds = pd.read_csv(f'pred_{self.filename}')
         df_ground = self.df_ground.copy(deep=True)
@@ -511,6 +540,12 @@ class Benchmark():
             ax2.set_title(f"Predicted mean ({i})")
             ax3.set_title(f"Expected improvement ({i})")
             plt.tight_layout()
+            if not os.path.exists(f"{self.run_folder}_plots"):
+                os.mkdir(f"{self.run_folder}_plots")
+            if step_num is not None:
+                plt.savefig(f"{self.run_folder}_plots/{self.filename_results}/{self.filename_results.split('.')[0]}_step_{step_num}_of_{total_steps-1}_heatmaps.svg")
+            else:
+                plt.savefig(f"{self.run_folder}_plots/{self.filename_results}_heatmaps.svg")
             plt.show()
 
     def _plot_ground_2d(self):
@@ -548,6 +583,10 @@ class Benchmark():
         if not os.path.exists(f"{self.run_folder}_plots"):
             os.mkdir(f"{self.run_folder}_plots")
         plt.rc("axes.spines", top=False, right=False)
+
+        if not os.path.exists(f"{self.run_folder}_plots"):
+            os.mkdir(f"{self.run_folder}_plots")
+
         plt.savefig(f"{self.run_folder}_plots/{self.filename_results}_ground.svg")
         plt.show()
 

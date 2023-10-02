@@ -4,7 +4,7 @@ import numpy as np
 from botorch.utils.multi_objective.box_decompositions import NondominatedPartitioning
 from botorch.optim import optimize_acqf_discrete
 from botorch.acquisition.multi_objective.monte_carlo import qExpectedHypervolumeImprovement
-from botorch.sampling.samplers import SobolQMCNormalSampler
+from botorch.sampling.normal import SobolQMCNormalSampler
 import pareto
 from scipy.stats import norm
 

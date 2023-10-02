@@ -15,7 +15,7 @@ from botorch.optim import optimize_acqf_discrete
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from .utils import EDBOStandardScaler
 from scipy.spatial.distance import cdist
-from idaes.surrogate.pysmo.sampling import LatinHypercubeSampling, CVTSampling
+from idaes.core.surrogate.pysmo.sampling import LatinHypercubeSampling, CVTSampling
 from .model import build_and_optimize_model
 from .scope_generator import create_reaction_scope
 from .acquisition import acq_multiobjective_EHVI, acq_multiobjective_MOUCB, acq_EI

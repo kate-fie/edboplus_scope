@@ -11,7 +11,7 @@ from ordered_set import OrderedSet
 
 from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
 from scipy.spatial.distance import cdist
-from idaes.surrogate.pysmo.sampling import LatinHypercubeSampling, CVTSampling
+from idaes.core.surrogate.pysmo.sampling import LatinHypercubeSampling, CVTSampling
 from .model import build_and_optimize_model
 from .scope_generator import create_reaction_scope
 from botorch.utils.multi_objective.box_decompositions import \
@@ -21,7 +21,7 @@ from botorch.acquisition.multi_objective.monte_carlo import \
     qExpectedHypervolumeImprovement, qNoisyExpectedHypervolumeImprovement
 
 from pathlib import Path
-from botorch.sampling.samplers import SobolQMCNormalSampler, IIDNormalSampler
+from botorch.sampling.normal import SobolQMCNormalSampler, IIDNormalSampler
 from edbo.plus.utils import EDBOStandardScaler
 
 tkwargs = {
@@ -235,7 +235,13 @@ class EDBOplus:
 
         # 3. Separate train and test data.
 
-        # 3.1. Auto-detect dummy features (one-hot-encoding).
+        # 3.0 Auto-detect SMILES. Make ECFP.
+        smiles_cols = [col for col in df.columns if 'smiles'.lower() in col.lower()]
+        # TODO: Check that first value in first smiles is col is a valid smiles string.
+
+        # TODO: make data here?
+
+        # 3.1. Auto-detect dummy features (one-hot-encoding) if not a float value.
         numeric_cols = df._get_numeric_data().columns
         for nc in numeric_cols:
             df[nc] = pd.to_numeric(df[nc], downcast='float')
@@ -247,6 +253,7 @@ class EDBOplus:
                   f" using One-Hot-Encoding: {ohe_columns}")
             ohe_features = True
 
+        # TODO: What does this look like? I need to add ECFP to this.
         data = pd.get_dummies(df, prefix=ohe_columns, columns=ohe_columns, drop_first=True)
 
         # 3.2. Any sample with a value 'PENDING' in any objective is a test.
@@ -391,7 +398,7 @@ class EDBOplus:
         if self.acquisition_sampler == 'IIDNormalSampler':
             sampler = IIDNormalSampler(num_samples=sobol_num_samples, collapse_batch_dims=False, seed=seed)
         if self.acquisition_sampler == 'SobolQMCNormalSampler':
-            sampler = SobolQMCNormalSampler(num_samples=sobol_num_samples, collapse_batch_dims=False)
+            sampler = SobolQMCNormalSampler(sample_shape=torch.Size([sobol_num_samples]))
 
         if acquisition_function == 'EHVI':
 

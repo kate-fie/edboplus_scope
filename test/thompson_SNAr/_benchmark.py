@@ -12,6 +12,7 @@ parser = argparse.ArgumentParser(description="Benchmark script")
 parser.add_argument('--rxn_components', type=str, help='Path to reaction components that you want to explore.', required=True)
 parser.add_argument('--data', type=str, help='Path to data file.', required=True)
 parser.add_argument('--batch', type=int, default=96, help='Batch size.', required=True)
+parser.add_argument('--max_path', type=str, default=None, help='Path to max peak height file.', required=True)
 parser.add_argument('--init_exp', action='store_true', help='Initialize with exp samples chosen randomly.')
 parser.add_argument('--init_size', type=int, default=96, help='Number of initial samples.')
 parser.add_argument('--train_choose', action='store_true', help='You already chose the train samples.')
@@ -28,6 +29,7 @@ init_exp = args.init_exp
 init_size = args.init_size
 train_choose = args.train_choose
 rounds = args.rounds
+max_path = args.max_path
 
 #######################
 # Benchmark inputs
@@ -73,6 +75,9 @@ for embedding in ['OHE']: # TODO: add 'ECFP'
         objective_thresholds = [None]
         print(f"Columns for regression: {columns_regression}")
 
+        # Set smiles_cols.
+        smiles_cols = ['A_smiles', 'B_smiles']
+
         # Get reaction components.
         with open(rxn_components_path, 'r') as f:
             rxn_components = json.load(f)
@@ -106,7 +111,9 @@ for embedding in ['OHE']: # TODO: add 'ECFP'
             init_size=init_size,
             filename=label_benchmark,
             filename_results=f'results_{label_benchmark}',
-            index_column=sort_column,acquisition_function=acq
+            index_column=sort_column,acquisition_function=acq,
+            smiles_cols=smiles_cols,
+            max_peak_height=max_path
         )
 
         bench.run(

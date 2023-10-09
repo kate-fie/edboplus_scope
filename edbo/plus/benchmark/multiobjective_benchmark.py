@@ -13,6 +13,11 @@ import copy
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from chemUtils.utils import utils
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+from edbo.plus.utils import append_max_peak_height
+from edbo.plus.utils import append_avg_tanimoto_sim
 
 
 def is_pareto(objectives):
@@ -51,7 +56,9 @@ class Benchmark():
                  init_size=96,
                  filename='benchmark.csv',
                  acquisition_function='EHVI',
-                 filename_results='benchmark_results.csv'):
+                 filename_results='benchmark_results.csv',
+                 max_peak_height=str,
+                 smiles_cols=None):
         """
 
         Parameters
@@ -80,6 +87,10 @@ class Benchmark():
             name of the file to run the optimization (temporary file).
         filename_results:
             name of the file to store the results of the benchmark.
+        smiles_cols: list
+            list of strings containing the names of the columns that will be considered as SMILES.
+        max_peak_height: str
+            path to csv file containing the max peak height of the reactions. Must be same length as combination of reactants.
         """
         self.df_ground = df_ground
         self.objective_names = objective_names
@@ -93,6 +104,8 @@ class Benchmark():
         self.filename_results = filename_results
         self.index_column = index_column
         self.acquisition_function = acquisition_function
+        self.smiles_cols = smiles_cols
+        self.max_peak_height = max_peak_height
 
         # Safe check. Check whether there are no duplicates in the regression domain and training columns exit.
         df_check = self.df_ground[self.features_regressions]
@@ -374,6 +387,11 @@ class Benchmark():
                     init_sampling_method=self.init_method,
                     seed=seed)
 
+            # Check if 'batch_num' column exists
+            if 'batch_num' not in df_run.columns:
+                df_run['batch_num'] = np.where(df_run['priority'] == 1, step, None)
+            else:
+                df_run.loc[df_run['priority'] == 1, 'batch_num'] = step
             df_next = df_run[df_run['priority'] >= 0.5]
             idx_next = df_next[self.index_column].values
 
@@ -405,6 +423,15 @@ class Benchmark():
                         self.collected_values[obj + "_collected_values"].append(self.df_ground[obj].values[argwhere_idx_next_ground])
                     except:
                         self.collected_values[obj + "_collected_values"] = [self.df_ground[obj].values[argwhere_idx_next_ground]]
+
+            # Append max peak height and avg tanimoto similarity for batches.
+            for i in self.objective_names:
+                df_run = df_run.apply(append_max_peak_height, objective_name=i, max_peak_height_path=self.max_peak_height, axis=1)
+                df_run = append_avg_tanimoto_sim(df_run, smiles_cols=self.smiles_cols)
+                # Reorder columns to ensure new columns are at the end
+                new_columns = [f'max_{i}', f'percent_diff_{i}']
+                all_columns = [col for col in df_run.columns if col not in new_columns] + new_columns
+                df_run = df_run.reindex(all_columns, axis=1)
 
             # Update the DataFrame with the new collected data.
             df_run.to_csv(self.filename, index=False)
@@ -471,6 +498,52 @@ class Benchmark():
 
             if plot_predictions and os.path.exists(f"pred_{self.filename}"):
                 self._plot_predictions(step_num=step, total_steps=steps)
+
+        # Make T-SNE plot of batches.
+        if plot_predictions and os.path.exists(f"pred_{self.filename}"):
+            self._plot_batches()
+
+    def _plot_batches(self, embedding=False):
+        """
+        Plot the batches in a T-SNE plot.
+        embedding: bool
+            If True, it will plot the full embedding of the batches. Else, will just plot fp of reactants.
+        """
+        assert self.smiles_cols is not None, "Please provide the smiles columns."
+        assert len(self.smiles_cols) == 2, "Please provide two smiles of reactants columns."
+
+        if embedding:
+            return NotImplementedError
+
+        df_preds = pd.read_csv(f'pred_{self.filename}')
+        r1_test = df_preds[df_preds['batch_num'] != None][self.smiles_cols[0]].values
+        r2_test = df_preds[df_preds['batch_num'] != None][self.smiles_cols[1]].values
+
+        react1_fp = utils.fp_list_from_smiles_list(r1_test)
+        react2_fp = utils.fp_list_from_smiles_list(r2_test)
+
+        pca = PCA(n_components=50)
+
+        # Plot 1. Keep seperate fp of reactants.
+        r1crds = pca.fit_transform(react1_fp)
+        r1crds_embedded = TSNE(n_components=2).fit_transform(r1crds)
+        r2crds = pca.fit_transform(react2_fp)
+        r2crds_embedded = TSNE(n_components=2).fit_transform(r2crds)
+
+        r1tsne_df = pd.DataFrame(r1crds_embedded, columns=["X", "Y"])
+        r1tsne_df['batch_num'] = df_preds[df_preds['batch_num'] != None]['batch_num']
+
+        r2tsne_df = pd.DataFrame(r2crds_embedded, columns=["X", "Y"])
+        r2tsne_df['batch_num'] = df_preds[df_preds['batch_num'] != None]['batch_num']
+
+        ax = sns.scatterplot(data=r1tsne_df, x="X", y="Y", hue='batch_num')
+        ax = sns.scatterplot(data=r2tsne_df, x="X", y="Y", hue='batch_num', ax=ax, markers=['o'])
+
+        plt.savefig(f"{self.run_folder}_plots/{self.filename.split('.')[0]}/{self.filename.split('.')[0]}_TSNE.svg")
+        plt.show()
+
+        # Plot 2. Concatenate fp of reactants.
+
 
     def _plot_predictions(self,
                           step_num=None,
@@ -542,10 +615,12 @@ class Benchmark():
             plt.tight_layout()
             if not os.path.exists(f"{self.run_folder}_plots"):
                 os.mkdir(f"{self.run_folder}_plots")
+            if not os.path.exists(f"{self.run_folder}_plots/{self.filename.split('.')[0]}"):
+                os.mkdir(f"{self.run_folder}_plots/{self.filename.split('.')[0]}")
             if step_num is not None:
-                plt.savefig(f"{self.run_folder}_plots/{self.filename_results}/{self.filename_results.split('.')[0]}_step_{step_num}_of_{total_steps-1}_heatmaps.svg")
+                plt.savefig(f"{self.run_folder}_plots/{self.filename.split('.')[0]}/{self.filename.split('.')[0]}_step_{step_num}_of_{total_steps-1}_heatmaps.svg")
             else:
-                plt.savefig(f"{self.run_folder}_plots/{self.filename_results}_heatmaps.svg")
+                plt.savefig(f"{self.run_folder}_plots/{self.filename}_heatmaps.svg")
             plt.show()
 
     def _plot_ground_2d(self):

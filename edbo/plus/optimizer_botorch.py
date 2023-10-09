@@ -69,8 +69,8 @@ class EDBOplus:
             idaes = LatinHypercubeSampling(df_sampling, batch, sampling_type="selection")
         elif sampling_method.lower() == 'cvtsampling':
             idaes = CVTSampling(df_sampling, batch, sampling_type="selection")
-
         if idaes is not None:
+            print(type(idaes.data))
             samples = idaes.sample_points()
 
         print(f"Creating a priority list using random sampling: {sampling_method}")

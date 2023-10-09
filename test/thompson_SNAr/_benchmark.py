@@ -18,6 +18,7 @@ parser.add_argument('--init_size', type=int, default=96, help='Number of initial
 parser.add_argument('--train_choose', action='store_true', help='You already chose the train samples.')
 parser.add_argument("--seed", type=int, default=1, help="Seed value for random initialization.")
 parser.add_argument('--rounds', type=int, default=3, help='Number of rounds to run. Default is 3.')
+parser.add_argument('--ecfp', action='store_true', help='Use ECFP encoding.')
 args = parser.parse_args()
 
 # Use parsed arguments
@@ -30,6 +31,7 @@ init_size = args.init_size
 train_choose = args.train_choose
 rounds = args.rounds
 max_path = args.max_path
+ecfp = args.ecfp
 
 #######################
 # Benchmark inputs
@@ -37,11 +39,11 @@ acq = 'EHVI'
 budget = batch * rounds
 sampling_method = 'lhs'
 
-for embedding in ['OHE']: # TODO: add 'ECFP'
-    if embedding == 'OHE':
+for embedding in ['OHE', 'ECFP']: # TODO: add 'ECFP'
+    columns_regression = ['A', 'B']
+    if embedding == 'ECFP':
         columns_regression = ['A', 'B']
-    elif embedding == 'ECFP':
-        columns_regression = ['A_smiles', 'B_smiles']
+        # TODO: ADD ECFP COLUMNS FOR REGRESSION to FILENAME
     # Select the features for the model.
     columns_regression += ['solvent',
                            'base',
@@ -113,6 +115,7 @@ for embedding in ['OHE']: # TODO: add 'ECFP'
             filename_results=f'results_{label_benchmark}',
             index_column=sort_column,acquisition_function=acq,
             smiles_cols=smiles_cols,
+            use_ecfp=ecfp,
             max_peak_height=max_path
         )
 

@@ -2,7 +2,8 @@
 import numpy as np
 import pandas as pd
 from chemUtils.utils import utils
-
+from rdkit import Chem
+from rdkit.Chem import AllChem
 
 class EDBOStandardScaler:
     """
@@ -77,3 +78,34 @@ def append_avg_tanimoto_sim(df: pd.DataFrame, smiles_cols: list) -> pd.DataFrame
         df.loc[condition, 'B_avg_tani'] = B_avg_tani
 
     return df
+
+def get_ecfp(row: pd.Series, smiles_cols: list) -> pd.Series:
+    """
+    Get ECFP representation of reactants.
+    """
+    # Get ECFP representation of reactants.
+    A_ecfp = list(AllChem.GetMorganFingerprintAsBitVect(Chem.MolFromSmiles(row[smiles_cols[0]]), 2, nBits=1024))
+    B_ecfp = list(AllChem.GetMorganFingerprintAsBitVect(Chem.MolFromSmiles(row[smiles_cols[1]]), 2, nBits=1024))
+
+    return pd.Series(A_ecfp + B_ecfp)
+
+def use_ecfp_representation(df: pd.DataFrame, smiles_cols: list, columns_regression: list) -> pd.DataFrame:
+    """
+    Use ECFP representation of reactants.
+    """
+    # Generate column names for the ECFP representation
+    A_ecfp_cols = [f'A_ecfp_{i}' for i in range(1024)]
+    B_ecfp_cols = [f'B_ecfp_{i}' for i in range(1024)]
+
+    # Apply get_ecfp and concatenate results with original dataframe
+    ecfp_df = df[smiles_cols].apply(get_ecfp, axis=1, result_type='expand')
+    ecfp_df.columns = A_ecfp_cols + B_ecfp_cols
+
+    # Concatenate the ECFP columns to the original dataframe
+    df = pd.concat([df, ecfp_df], axis=1)
+
+    # Extend columns_regression list
+    columns_regression.extend(A_ecfp_cols + B_ecfp_cols)
+
+    return df, columns_regression
+

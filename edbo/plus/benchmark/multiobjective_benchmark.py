@@ -59,7 +59,7 @@ class Benchmark():
                  filename_results='benchmark_results.csv',
                  max_peak_height=str,
                  smiles_cols=None,
-                 smiles=False):
+                 use_ecfp=False):
         """
 
         Parameters
@@ -92,7 +92,7 @@ class Benchmark():
             list of strings containing the names of the columns that will be considered as SMILES.
         max_peak_height: str
             path to csv file containing the max peak height of the reactions. Must be same length as combination of reactants.
-        smiles: bool
+        use_ecfp: bool
             if True, use ecfp encoding.
         """
         self.df_ground = df_ground
@@ -109,7 +109,7 @@ class Benchmark():
         self.acquisition_function = acquisition_function
         self.smiles_cols = smiles_cols
         self.max_peak_height = max_peak_height
-        self.smiles = smiles
+        self.use_ecfp = use_ecfp
 
         # Safe check. Check whether there are no duplicates in the regression domain and training columns exit.
         df_check = self.df_ground[self.features_regressions]
